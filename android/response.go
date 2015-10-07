@@ -12,6 +12,7 @@ type ServiceResponse struct {
 	Failure      int
 	CanonicalIDs int
 	Total        int
+	Extra        map[string]interface{}
 	Results      []ServiceResult
 }
 
@@ -21,11 +22,13 @@ type ServiceResult struct {
 	NewRegistrationID string
 }
 
-func NewServiceResponse(resp *gcm.Response, regIDs []string) *ServiceResponse {
+func NewServiceResponse(resp *gcm.Response, msg *gcm.Message) *ServiceResponse {
+	regIDs := msg.RegistrationIDs
 	sr := &ServiceResponse{
 		Success:      resp.Success,
 		Failure:      resp.Failure,
 		CanonicalIDs: resp.CanonicalIDs,
+		Extra:        msg.Extra(),
 		Total:        len(regIDs)}
 
 	if resp.Failure == 0 && resp.CanonicalIDs == 0 {

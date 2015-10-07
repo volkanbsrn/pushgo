@@ -69,7 +69,7 @@ func (s *Service) sender() {
 			if err != nil {
 				log.Println("pushgo error: ", err)
 			} else {
-				s.respCh <- NewServiceResponse(resp, msg.RegistrationIDs)
+				s.respCh <- NewServiceResponse(resp, msg)
 			}
 
 		}
