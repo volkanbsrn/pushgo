@@ -50,10 +50,8 @@ func StartService(apiKey string, senderCount, retryCount int, isProduction bool)
 
 func (s *Service) Queue(msg *gcm.Message) {
 	if s.isProduction {
-		log.Println("message queue prod")
-		msg.DryRun = true
+		msg.DryRun = false
 	} else {
-		log.Println("message queue local")
 		msg.DryRun = true
 	}
 	s.msgQueue <- msg
