@@ -1,33 +1,27 @@
-package android
+package ios
 
 import (
 	"log"
+	"net/http"
 
-	"github.com/omerkirk/gcm"
-)
-
-const (
-	// Maximum number of messages to be queued
-	maxNumberOfMessages = 100000
-
-	// Response channel buffer size
-	responseChannelBufferSize = 1000
+	"github.com/omerkirk/apns"
 )
 
 type Service struct {
-	gcmClient   *gcm.Sender
+	apnsClient  *apns.Client
 	senderCount int
 	retryCount  int
 
 	isProduction bool
 
 	respCh   chan *ServiceResponse
-	msgQueue chan *gcm.Message
+	msgQueue chan *apns.Notification
+
+	client *http.Client
 }
 
 func StartService(apiKey string, senderCount, retryCount int, isProduction bool) *Service {
-	gcmService := &Service{
-		gcmClient: &gcm.Sender{ApiKey: apiKey},
+	apnsService := &Service{
 
 		senderCount: senderCount,
 		retryCount:  retryCount,
@@ -36,7 +30,7 @@ func StartService(apiKey string, senderCount, retryCount int, isProduction bool)
 
 		respCh: make(chan *ServiceResponse, responseChannelBufferSize),
 
-		msgQueue: make(chan *gcm.Message, maxNumberOfMessages)}
+		msgQueue: make(chan *apns.Notification, maxNumberOfMessages)}
 
 	for i := 0; i < senderCount; i++ {
 		go gcmService.sender()
@@ -44,12 +38,7 @@ func StartService(apiKey string, senderCount, retryCount int, isProduction bool)
 	return gcmService
 }
 
-func (s *Service) Queue(msg *gcm.Message) {
-	if s.isProduction {
-		msg.DryRun = false
-	} else {
-		msg.DryRun = true
-	}
+func (s *Service) Queue(msg *apns.Notification) {
 	s.msgQueue <- msg
 }
 
@@ -61,7 +50,7 @@ func (s *Service) sender() {
 	for {
 		select {
 		case msg := <-s.msgQueue:
-			resp, err := s.gcmClient.Send(msg, s.retryCount)
+			resp, err := s.apnsClient.Send(msg)
 			if err != nil {
 				log.Println("pushgo error: ", err)
 			} else {
