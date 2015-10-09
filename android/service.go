@@ -39,8 +39,7 @@ func StartService(apiKey string, senderCount, retryCount int, isProduction bool)
 
 		respCh: make(chan *ServiceResponse, responseChannelBufferSize),
 
-		msgQueue: make(chan *gcm.Message, maxNumberOfMessages),
-		client:   new(http.Client)}
+		msgQueue: make(chan *gcm.Message, maxNumberOfMessages)}
 
 	for i := 0; i < senderCount; i++ {
 		go gcmService.sender()
