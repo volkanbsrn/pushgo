@@ -2,7 +2,6 @@ package android
 
 import (
 	"log"
-	"net/http"
 
 	"github.com/omerkirk/gcm"
 )
@@ -24,8 +23,6 @@ type Service struct {
 
 	respCh   chan *ServiceResponse
 	msgQueue chan *gcm.Message
-
-	client *http.Client
 }
 
 func StartService(apiKey string, senderCount, retryCount int, isProduction bool) *Service {
