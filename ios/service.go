@@ -1,96 +1,145 @@
 package ios
 
 import (
+	"crypto/tls"
+	"encoding/json"
 	"log"
-	"net/http"
 	"time"
 
-	"github.com/omerkirk/apns"
+	"github.com/RobotsAndPencils/buford/certificate"
+	"github.com/RobotsAndPencils/buford/payload"
+	"github.com/RobotsAndPencils/buford/push"
+	"github.com/omerkirk/pushgo/core"
+)
+
+const (
+	// Maximum number of messages to be queued
+	maxNumberOfMessages = 100000
+
+	// Response channel buffer size
+	responseChannelBufferSize = 1000
 )
 
 type Service struct {
-	apnsClient *apns.Client
-
-	certFile string
-	keyFile  string
+	certificate tls.Certificate
+	bundleID    string
 
 	senderCount int
-	retryCount  int
 
 	isProduction bool
 
-	respCh   chan *ServiceResponse
-	msgQueue chan *apns.Notification
+	respCh chan *core.Response
 
-	client *http.Client
+	msgQueue chan *msgResponse
 }
 
-func StartService(certFile, keyFile string, senderCount, retryCount int, isProduction bool) *Service {
-	gw := apns.SandboxGateway
-	if isProduction {
-		gw = apns.ProductionGateway
+func New(certName, passwd string, bundleID string, senderCount int, isProduction bool) *Service {
+	cert, key, err := certificate.Load(certName, passwd)
+	if err != nil {
+		log.Fatal(err)
 	}
-	apnsClient := apns.NewClient(gw, certFile, keyFile)
-	apnsService := &Service{
-		client: apnsClient,
-
-		certFile: certFile,
-		keyFile:  keyFile,
-
-		senderCount: senderCount,
-		retryCount:  retryCount,
-
+	s := &Service{
+		certificate:  certificate.TLS(cert, key),
+		bundleID:     bundleID,
 		isProduction: isProduction,
 
-		respCh: make(chan *ServiceResponse, responseChannelBufferSize),
+		senderCount: senderCount,
 
-		msgQueue: make(chan *apns.Notification, maxNumberOfMessages)}
+		respCh: make(chan *core.Response, responseChannelBufferSize),
+
+		msgQueue: make(chan *msgResponse, maxNumberOfMessages)}
 
 	for i := 0; i < senderCount; i++ {
-		go gcmService.sender()
+		go s.sender()
 	}
-	return gcmService
+	return s
 }
 
-func (s *Service) Queue(msg *apns.Notification) {
-	s.msgQueue <- msg
+func (s *Service) Queue(msg *core.Message) {
+	p := payload.APS{
+		Alert: payload.Alert{Body: msg.Alert},
+		Sound: msg.Sound}
+
+	pm := p.Map()
+	for k, v := range msg.Custom {
+		pm[k] = v
+	}
+	b, err := json.Marshal(pm)
+	if err != nil {
+		log.Printf("ios queue error: cannot convert msg to json %v\n", pm)
+		return
+	}
+	msg.Bytes = b
+
+	go s.msgDistributor(msg)
 }
 
-func (s *Service) Listen() chan *ServiceResponse {
+func (s *Service) Listen() chan *core.Response {
 	return s.respCh
 }
 
-func (s *Service) sender() {
+func (s *Service) msgDistributor(msg *core.Message) {
+	log.Println("msg dist started")
+	respCh := make(chan error)
+	sr := &core.Response{
+		Extra: msg.Extra,
+	}
+	h := &push.Headers{
+		Topic:      s.bundleID,
+		Expiration: time.Now().Add(time.Second * time.Duration(msg.Expiration))}
+	if msg.Priority == core.PriorityNormal {
+		h.LowPriority = true
+	}
+	for i := 0; i < len(msg.Devices); i++ {
+		s.msgQueue <- &msgResponse{payload: msg.Bytes, device: msg.Devices[i], headers: h, respCh: respCh}
+	}
+
 	for {
 		select {
-		case msg := <-s.msgQueue:
-			resp, err := s.apnsClient.Send(msg)
+		case err := <-respCh:
+			sr.Total++
 			if err != nil {
-				log.Println("pushgo error: ", err)
+				log.Printf("pushgo ios error: %v\n", err)
+				sr.Failure++
+				if err == push.ErrUnregistered {
+					sp := core.Result{}
+					sp.Type = core.ResponseTypeDeviceExpired
+					sp.RegistrationID = msg.Device
+					sr.Results = append(sr.Results, sp)
+				}
 			} else {
-				s.respCh <- NewServiceResponse(resp, msg)
+				sr.Success++
 			}
-
+			if sr.Total == len(msg.Devices) {
+				s.respCh <- sr
+				return
+			}
 		}
 	}
+	log.Println("msg dist ended")
 }
 
-func (s *Service) listener() {
-	for f := range s.client.FailedNotifs {
-		log.Printf("Notif", f.Notif.ID, "failed with", f.Err.Error())
+type msgResponse struct {
+	payload []byte
+	device  string
+	headers *push.Headers
+
+	respCh chan error
+}
+
+func (s *Service) sender() {
+	apns := push.Service{
+		Client: push.NewClient(s.certificate)}
+	if s.isProduction {
+		apns.Host = push.Production
+	} else {
+		apns.Host = push.Development
 	}
-}
-
-func (s *Service) feedbackListener() {
 	for {
-		f, err := apns.NewFeedback(apns.ProductionFeedbackGateway, s.certFile, s.keyFile)
-		if err != nil {
-			log.Println("Could not create feedback", err.Error())
-		} else {
-			for ft := range f.Receive() {
-				log.Println("Feedback for token:", ft.DeviceToken)
-			}
+		select {
+		case mr := <-s.msgQueue:
+			_, err := apns.PushBytes(mr.device, mr.headers, mr.payload)
+			mr.respCh <- err
 		}
-		time.Sleep(1 * time.Hour)
 	}
 }

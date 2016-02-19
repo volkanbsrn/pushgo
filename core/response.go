@@ -7,24 +7,24 @@ const (
 	ResponseTypeDeviceChanged = 2
 )
 
-type ServiceResponse struct {
+type Response struct {
 	Success      int
 	Failure      int
 	CanonicalIDs int
 	Total        int
 	Extra        map[string]interface{}
-	Results      []ServiceResult
+	Results      []Result
 }
 
-type ServiceResult struct {
+type Result struct {
 	Type              int
 	RegistrationID    string
 	NewRegistrationID string
 }
 
-func NewServiceResponse(resp *gcm.Response, msg *gcm.Message) *ServiceResponse {
+func NewResponse(resp *gcm.Response, msg *gcm.Message) *Response {
 	regIDs := msg.RegistrationIDs
-	sr := &ServiceResponse{
+	sr := &Response{
 		Success:      resp.Success,
 		Failure:      resp.Failure,
 		CanonicalIDs: resp.CanonicalIDs,
@@ -35,9 +35,9 @@ func NewServiceResponse(resp *gcm.Response, msg *gcm.Message) *ServiceResponse {
 		return sr
 	}
 
-	serviceResults := make([]ServiceResult, 0)
+	serviceResults := make([]Result, 0)
 	for i := 0; i < len(regIDs); i++ {
-		sp := ServiceResult{}
+		sp := Result{}
 		result := resp.Results[i]
 		if result.MessageID != "" {
 			if result.RegistrationID != "" {

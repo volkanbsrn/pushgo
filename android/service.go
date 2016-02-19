@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/omerkirk/gcm"
+	"github.com/omerkirk/pushgo/core"
 )
 
 const (
@@ -15,45 +16,58 @@ const (
 )
 
 type Service struct {
-	gcmClient   *gcm.Sender
+	client *gcm.Sender
+
 	senderCount int
 	retryCount  int
 
 	isProduction bool
 
-	respCh   chan *ServiceResponse
+	respCh   chan *core.Response
 	msgQueue chan *gcm.Message
 }
 
-func StartService(apiKey string, senderCount, retryCount int, isProduction bool) *Service {
-	gcmService := &Service{
-		gcmClient: &gcm.Sender{ApiKey: apiKey},
+func New(apiKey string, senderCount, retryCount int, isProduction bool) *Service {
+	s := &Service{
+		client: &gcm.Sender{ApiKey: apiKey},
 
 		senderCount: senderCount,
 		retryCount:  retryCount,
 
 		isProduction: isProduction,
 
-		respCh: make(chan *ServiceResponse, responseChannelBufferSize),
+		respCh: make(chan *core.Response, responseChannelBufferSize),
 
 		msgQueue: make(chan *gcm.Message, maxNumberOfMessages)}
 
 	for i := 0; i < senderCount; i++ {
-		go gcmService.sender()
+		go s.sender()
 	}
-	return gcmService
+	return s
 }
 
-func (s *Service) Queue(msg *gcm.Message) {
+func (s *Service) Queue(msg *core.Message) {
+	gcmMsg := gcm.NewMessage(nil, msg.Json, "", msg.Expiration)
+	if msg.Priority == core.PriorityNormal {
+		gcmMsg.Priority = gcm.MessagePriorityNormal
+	} else if msg.Priority == core.PriorityHigh {
+		gcmMsg.Priority = gcm.MessagePriorityHigh
+	}
+	gcmMsg.SetExtra(msg.Extra)
 	if s.isProduction {
-		msg.DryRun = false
+		gcmMsg.DryRun = false
 	} else {
-		msg.DryRun = true
+		gcmMsg.DryRun = true
 	}
-	s.msgQueue <- msg
+	deviceGroups := core.DeviceList(msg.Devices).Group(1000)
+	for i := 0; i < len(deviceGroups); i++ {
+		gcmMsg.RegistrationIDs = deviceGroups[i]
+		s.msgQueue <- gcmMsg
+	}
+
 }
 
-func (s *Service) Listen() chan *ServiceResponse {
+func (s *Service) Listen() chan *core.Response {
 	return s.respCh
 }
 
@@ -61,11 +75,11 @@ func (s *Service) sender() {
 	for {
 		select {
 		case msg := <-s.msgQueue:
-			resp, err := s.gcmClient.Send(msg, s.retryCount)
+			resp, err := s.client.Send(msg, s.retryCount)
 			if err != nil {
 				log.Println("pushgo error: ", err)
 			} else {
-				s.respCh <- NewServiceResponse(resp, msg)
+				s.respCh <- core.NewResponse(resp, msg)
 			}
 
 		}
