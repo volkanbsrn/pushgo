@@ -128,8 +128,12 @@ type msgResponse struct {
 }
 
 func (s *Service) sender() {
+	client, err := push.NewClient(s.certificate)
+	if err != nil {
+		log.Fatal(err)
+	}
 	apns := push.Service{
-		Client: push.NewClient(s.certificate)}
+		Client: client}
 	if s.isProduction {
 		apns.Host = push.Production
 	} else {
