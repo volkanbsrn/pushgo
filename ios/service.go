@@ -79,7 +79,8 @@ func (s *Service) Listen() chan *core.Response {
 }
 
 func (s *Service) msgDistributor(msg *core.Message) {
-	log.Println("msg dist started")
+	log.Printf("pushgo msg dist: started for %d devices\n", len(msg.Devices))
+	defer log.Println("pushgo: msg dist ended")
 	respCh := make(chan error)
 	sr := &core.Response{
 		Extra: msg.Extra,
@@ -99,7 +100,6 @@ func (s *Service) msgDistributor(msg *core.Message) {
 		case err := <-respCh:
 			sr.Total++
 			if err != nil {
-				log.Printf("pushgo ios error: %v\n", err)
 				sr.Failure++
 				if err == push.ErrUnregistered {
 					sp := core.Result{}
@@ -116,7 +116,7 @@ func (s *Service) msgDistributor(msg *core.Message) {
 			}
 		}
 	}
-	log.Println("msg dist ended")
+
 }
 
 type msgResponse struct {
