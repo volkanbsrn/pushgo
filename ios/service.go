@@ -66,7 +66,7 @@ func (s *Service) Queue(msg *core.Message) {
 	}
 	b, err := json.Marshal(pm)
 	if err != nil {
-		log.Printf("ios queue error: cannot convert msg to json %v\n", pm)
+		log.Printf("pushgo: ios queue error: cannot convert msg to json %v\n", pm)
 		return
 	}
 	msg.Bytes = b
@@ -79,8 +79,6 @@ func (s *Service) Listen() chan *core.Response {
 }
 
 func (s *Service) msgDistributor(msg *core.Message) {
-	log.Printf("pushgo msg dist: started for %d devices\n", len(msg.Devices))
-	defer log.Println("pushgo: msg dist ended")
 	respCh := make(chan error)
 	sr := &core.Response{
 		Extra: msg.Extra,
@@ -143,6 +141,7 @@ func (s *Service) sender() {
 		select {
 		case mr := <-s.msgQueue:
 			_, err := apns.PushBytes(mr.device, mr.headers, mr.payload)
+			log.Printf("pushgo ios error: %v\n", err)
 			mr.respCh <- err
 		}
 	}
