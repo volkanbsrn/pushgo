@@ -141,7 +141,6 @@ func (s *Service) sender() {
 		select {
 		case mr := <-s.msgQueue:
 			_, err := apns.PushBytes(mr.device, mr.headers, mr.payload)
-			log.Printf("pushgo ios error: %v\n", err)
 			mr.respCh <- err
 		}
 	}
