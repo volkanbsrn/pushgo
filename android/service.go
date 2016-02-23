@@ -47,24 +47,17 @@ func New(apiKey string, senderCount, retryCount int, isProduction bool) *Service
 }
 
 func (s *Service) Queue(msg *core.Message) {
-	gcmMsg := gcm.NewMessage(nil, msg.Json, "", msg.Expiration)
+	priority := gcm.MessagePriorityHigh
 	if msg.Priority == core.PriorityNormal {
-		gcmMsg.Priority = gcm.MessagePriorityNormal
-	} else if msg.Priority == core.PriorityHigh {
-		gcmMsg.Priority = gcm.MessagePriorityHigh
-	}
-	gcmMsg.SetExtra(msg.Extra)
-	if s.isProduction {
-		gcmMsg.DryRun = false
-	} else {
-		gcmMsg.DryRun = true
+		priority = gcm.MessagePriorityNormal
 	}
 	deviceGroups := core.DeviceList(msg.Devices).Group(1000)
 	for i := 0; i < len(deviceGroups); i++ {
-		gcmMsg.RegistrationIDs = deviceGroups[i]
+		gcmMsg := gcm.NewMessage(deviceGroups[i], msg.Json, priority, msg.Expiration)
+		gcmMsg.SetExtra(msg.Extra)
+		gcmMsg.DryRun = !s.isProduction
 		s.msgQueue <- gcmMsg
 	}
-
 }
 
 func (s *Service) Listen() chan *core.Response {

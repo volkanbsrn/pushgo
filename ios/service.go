@@ -14,10 +14,10 @@ import (
 
 const (
 	// Maximum number of messages to be queued
-	maxNumberOfMessages = 100000
+	maxNumberOfMessages = 100000000
 
 	// Response channel buffer size
-	responseChannelBufferSize = 1000
+	responseChannelBufferSize = 100000
 )
 
 type Service struct {
@@ -79,7 +79,7 @@ func (s *Service) Listen() chan *core.Response {
 }
 
 func (s *Service) msgDistributor(msg *core.Message) {
-	respCh := make(chan error)
+	respCh := make(chan error, responseChannelBufferSize)
 	sr := &core.Response{
 		Extra: msg.Extra,
 	}
