@@ -81,7 +81,8 @@ func (s *Service) Listen() chan *core.Response {
 func (s *Service) msgDistributor(msg *core.Message) {
 	respCh := make(chan error, responseChannelBufferSize)
 	sr := &core.Response{
-		Extra: msg.Extra,
+		Extra:     msg.Extra,
+		ReasonMap: make(map[error]int),
 	}
 	h := &push.Headers{
 		Topic:      s.bundleID,
@@ -95,14 +96,26 @@ func (s *Service) msgDistributor(msg *core.Message) {
 
 	for {
 		select {
-		case err := <-respCh:
+		case iosErr := <-respCh:
 			sr.Total++
-			if err != nil {
+			if iosErr != nil {
+				var err error
+				e, ok := iosErr.(*push.Error)
+				if !ok {
+					err = iosErr
+				} else {
+					err = e.Err
+				}
 				sr.Failure++
-				if err == push.ErrUnregistered {
+				if count, ok := sr.ReasonMap[err]; ok {
+					sr.ReasonMap[err] = count + 1
+				} else {
+					sr.ReasonMap[err] = 1
+				}
+				if err == push.ErrUnregistered || err == push.ErrDeviceTokenNotForTopic {
 					sp := core.Result{}
 					sp.Type = core.ResponseTypeDeviceExpired
-					sp.RegistrationID = msg.Device
+					sp.RegistrationID = e.DeviceToken
 					sr.Results = append(sr.Results, sp)
 				}
 			} else {

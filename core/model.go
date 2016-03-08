@@ -28,7 +28,6 @@ type Message struct {
 	Alert  string
 	Sound  string
 	Custom map[string]interface{}
-	Device string
 	Bytes  []byte
 
 	Extra map[string]interface{}

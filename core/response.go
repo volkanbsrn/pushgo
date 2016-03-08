@@ -10,6 +10,7 @@ const (
 type Response struct {
 	Success      int
 	Failure      int
+	ReasonMap    map[error]int
 	CanonicalIDs int
 	Total        int
 	Extra        map[string]interface{}
@@ -37,10 +38,10 @@ func NewResponse(resp *gcm.Response, msg *gcm.Message) *Response {
 
 	serviceResults := make([]Result, 0)
 	for i := 0; i < len(regIDs); i++ {
-		sp := Result{}
 		result := resp.Results[i]
 		if result.MessageID != "" {
 			if result.RegistrationID != "" {
+				sp := Result{}
 				sp.Type = ResponseTypeDeviceChanged
 				sp.RegistrationID = regIDs[i]
 				sp.NewRegistrationID = result.RegistrationID
@@ -48,6 +49,7 @@ func NewResponse(resp *gcm.Response, msg *gcm.Message) *Response {
 			}
 		} else {
 			if result.Error == gcm.ResponseErrorInvalidRegistration || result.Error == gcm.ResponseErrorNotRegistered {
+				sp := Result{}
 				sp.Type = ResponseTypeDeviceExpired
 				sp.RegistrationID = regIDs[i]
 				serviceResults = append(serviceResults, sp)
