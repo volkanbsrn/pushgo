@@ -112,6 +112,7 @@ func (s *Service) msgDistributor(msg *core.Message) {
 				} else {
 					sr.ReasonMap[err] = 1
 				}
+				// IOs specific error can be returned even if the returned error is not of type push.Error
 				if e != nil && (err == push.ErrUnregistered || err == push.ErrDeviceTokenNotForTopic) {
 					sp := core.Result{}
 					sp.Type = core.ResponseTypeDeviceExpired
