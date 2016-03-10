@@ -112,7 +112,7 @@ func (s *Service) msgDistributor(msg *core.Message) {
 				} else {
 					sr.ReasonMap[err] = 1
 				}
-				if err == push.ErrUnregistered || err == push.ErrDeviceTokenNotForTopic {
+				if e != nil && (err == push.ErrUnregistered || err == push.ErrDeviceTokenNotForTopic) {
 					sp := core.Result{}
 					sp.Type = core.ResponseTypeDeviceExpired
 					sp.RegistrationID = e.DeviceToken
