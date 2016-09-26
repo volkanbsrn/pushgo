@@ -34,12 +34,12 @@ type Service struct {
 }
 
 func New(certName, passwd string, bundleID string, senderCount int, isProduction bool) *Service {
-	cert, key, err := certificate.Load(certName, passwd)
+	cert, err := certificate.Load(certName, passwd)
 	if err != nil {
 		log.Fatal(err)
 	}
 	s := &Service{
-		certificate:  certificate.TLS(cert, key),
+		certificate:  cert,
 		bundleID:     bundleID,
 		isProduction: isProduction,
 
@@ -104,7 +104,7 @@ func (s *Service) msgDistributor(msg *core.Message) {
 				if !ok {
 					err = iosErr
 				} else {
-					err = e.Err
+					err = e.Reason
 				}
 				sr.Failure++
 				if count, ok := sr.ReasonMap[err]; ok {
@@ -154,7 +154,7 @@ func (s *Service) sender() {
 	for {
 		select {
 		case mr := <-s.msgQueue:
-			_, err := apns.PushBytes(mr.device, mr.headers, mr.payload)
+			_, err := apns.Push(mr.device, mr.headers, mr.payload)
 			mr.respCh <- err
 		}
 	}
