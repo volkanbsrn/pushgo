@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/RobotsAndPencils/buford/certificate"
@@ -30,7 +31,7 @@ type Service struct {
 
 	respCh chan *core.Response
 
-	msgQueue chan *msgResponse
+	msgQueue chan *message
 }
 
 func New(certName, passwd string, bundleID string, senderCount int, isProduction bool) *Service {
@@ -47,7 +48,7 @@ func New(certName, passwd string, bundleID string, senderCount int, isProduction
 
 		respCh: make(chan *core.Response, responseChannelBufferSize),
 
-		msgQueue: make(chan *msgResponse, maxNumberOfMessages)}
+		msgQueue: make(chan *message, maxNumberOfMessages)}
 
 	for i := 0; i < senderCount; i++ {
 		go s.sender()
@@ -79,7 +80,7 @@ func (s *Service) Listen() chan *core.Response {
 }
 
 func (s *Service) msgDistributor(msg *core.Message) {
-	respCh := make(chan error, responseChannelBufferSize)
+	respCh := make(chan push.Response, responseChannelBufferSize)
 	sr := &core.Response{
 		Extra:     msg.Extra,
 		ReasonMap: make(map[error]int),
@@ -90,19 +91,21 @@ func (s *Service) msgDistributor(msg *core.Message) {
 	if msg.Priority == core.PriorityNormal {
 		h.LowPriority = true
 	}
-	for i := 0; i < len(msg.Devices); i++ {
-		s.msgQueue <- &msgResponse{payload: msg.Bytes, device: msg.Devices[i], headers: h, respCh: respCh}
+	groupSize := (len(msg.Devices) / s.senderCount) + 1
+	deviceGroups := core.DeviceList(msg.Devices).Group(groupSize)
+	for i := 0; i < len(deviceGroups); i++ {
+		s.msgQueue <- &message{payload: msg.Bytes, devices: deviceGroups[i], headers: h, respCh: respCh}
 	}
 
 	for {
 		select {
-		case iosErr := <-respCh:
+		case iosResp := <-respCh:
 			sr.Total++
-			if iosErr != nil {
+			if iosResp.Err != nil {
 				var err error
-				e, ok := iosErr.(*push.Error)
+				e, ok := iosResp.Err.(*push.Error)
 				if !ok {
-					err = iosErr
+					err = iosResp.Err
 				} else {
 					err = e.Reason
 				}
@@ -116,7 +119,7 @@ func (s *Service) msgDistributor(msg *core.Message) {
 				if e != nil && (err == push.ErrUnregistered || err == push.ErrDeviceTokenNotForTopic) {
 					sp := core.Result{}
 					sp.Type = core.ResponseTypeDeviceExpired
-					sp.RegistrationID = e.DeviceToken
+					sp.RegistrationID = iosResp.DeviceToken
 					sr.Results = append(sr.Results, sp)
 				}
 			} else {
@@ -131,12 +134,12 @@ func (s *Service) msgDistributor(msg *core.Message) {
 
 }
 
-type msgResponse struct {
+type message struct {
 	payload []byte
-	device  string
+	devices []string
 	headers *push.Headers
 
-	respCh chan error
+	respCh chan push.Response
 }
 
 func (s *Service) sender() {
@@ -144,18 +147,34 @@ func (s *Service) sender() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	apns := push.Service{
+	apns := &push.Service{
 		Client: client}
 	if s.isProduction {
 		apns.Host = push.Production
 	} else {
 		apns.Host = push.Development
 	}
+
 	for {
 		select {
 		case mr := <-s.msgQueue:
-			_, err := apns.Push(mr.device, mr.headers, mr.payload)
-			mr.respCh <- err
+			queue := push.NewQueue(apns, 100)
+			var wg sync.WaitGroup
+			go func() {
+				for r := range queue.Responses {
+					resp := r
+					mr.respCh <- resp
+					wg.Done()
+				}
+			}()
+
+			for i := 0; i < len(mr.devices); i++ {
+				wg.Add(1)
+				queue.Push(mr.devices[i], mr.headers, mr.payload)
+			}
+			wg.Wait()
+			queue.Close()
+			queue = nil
 		}
 	}
 }
