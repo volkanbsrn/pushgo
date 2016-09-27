@@ -158,7 +158,7 @@ func (s *Service) sender() {
 	for {
 		select {
 		case mr := <-s.msgQueue:
-			queue := push.NewQueue(apns, 100)
+			queue := push.NewQueue(apns, 250)
 			var wg sync.WaitGroup
 			go func() {
 				for r := range queue.Responses {
@@ -174,7 +174,6 @@ func (s *Service) sender() {
 			}
 			wg.Wait()
 			queue.Close()
-			queue = nil
 		}
 	}
 }
