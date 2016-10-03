@@ -62,7 +62,11 @@ type DeviceList []string
 
 func (dl DeviceList) Group(groupSize int) [][]string {
 	deviceList := []string(dl)
-	groupCount := (len(deviceList) / groupSize) + 1
+	groupCount := (len(deviceList) / groupSize)
+	rem := len(deviceList) % groupSize
+	if rem > 0 {
+		groupCount = groupCount + 1
+	}
 
 	groupedDevices := make([][]string, groupCount)
 	for i := 0; i < groupCount; i++ {
