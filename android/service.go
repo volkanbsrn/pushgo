@@ -41,7 +41,7 @@ func New(apiKey string, senderCount, retryCount int, isProduction bool) *Service
 		msgQueue: make(chan *gcm.Message, maxNumberOfMessages)}
 
 	for i := 0; i < senderCount; i++ {
-		go s.sender()
+		go s.sender(i)
 	}
 	return s
 }
@@ -64,15 +64,21 @@ func (s *Service) Listen() chan *core.Response {
 	return s.respCh
 }
 
-func (s *Service) sender() {
+func (s *Service) sender(senderID int) {
 	for {
 		select {
 		case msg := <-s.msgQueue:
+			extra := msg.Extra()
+			header := extra["header"]
+			thread := extra["thread"]
+			log.Printf("pushgo: sender %d received msg from thread %d of %d devices for header %d\n", senderID, thread, len(msg.RegistrationIDs), header)
 			resp, err := s.client.Send(msg, s.retryCount)
+			log.Println("pushgo: sender %d received response of thread %d for header %d\n", senderID, thread, header)
 			if err != nil {
 				log.Println("pushgo error: ", err)
 			} else {
 				s.respCh <- core.NewResponse(resp, msg)
+				log.Println("pushgo: sender %d pushed response of thread %d to response channel for header %d\n", senderID, thread, header)
 			}
 
 		}
