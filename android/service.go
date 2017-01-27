@@ -72,15 +72,16 @@ func (s *Service) sender(senderID int) {
 			header := extra["header"]
 			thread := extra["thread"]
 			log.Printf("pushgo: sender %d received msg from thread %d of %d devices for header %d\n", senderID, thread, len(msg.RegistrationIDs), header)
-			resp, err := s.client.Send(msg, s.retryCount)
-			log.Printf("pushgo: sender %d received response of thread %d for header %d\n", senderID, thread, header)
-			if err != nil {
-				log.Println("pushgo error: ", err)
-			} else {
-				s.respCh <- core.NewResponse(resp, msg)
-				log.Printf("pushgo: sender %d pushed response of thread %d to response channel for header %d\n", senderID, thread, header)
-			}
-
+			go func(m *gcm.Message) {
+				resp, err := s.client.Send(m, s.retryCount)
+				log.Printf("pushgo: sender %d received response of thread %d for header %d\n", senderID, thread, header)
+				if err != nil {
+					log.Println("pushgo error: ", err)
+				} else {
+					s.respCh <- core.NewResponse(resp, m)
+					log.Printf("pushgo: sender %d pushed response of thread %d to response channel for header %d\n", senderID, thread, header)
+				}
+			}(msg)
 		}
 	}
 }
