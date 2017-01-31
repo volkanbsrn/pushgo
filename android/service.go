@@ -16,8 +16,6 @@ const (
 )
 
 type Service struct {
-	client *gcm.Sender
-
 	senderCount int
 	retryCount  int
 
@@ -39,7 +37,7 @@ func New(apiKey string, senderCount, retryCount int, isProduction bool) *Service
 		msgQueue: make(chan *gcm.Message, maxNumberOfMessages)}
 
 	for i := 0; i < senderCount; i++ {
-		go s.sender(i, &gcm.Sender{ApiKey: apiKey})
+		go s.sender(i, apiKey)
 	}
 	return s
 }
@@ -62,7 +60,7 @@ func (s *Service) Listen() chan *core.Response {
 	return s.respCh
 }
 
-func (s *Service) sender(senderID int, client *gcm.Sender) {
+func (s *Service) sender(senderID int, apiKey string) {
 	for {
 		select {
 		case msg := <-s.msgQueue:
@@ -70,7 +68,8 @@ func (s *Service) sender(senderID int, client *gcm.Sender) {
 			header := extra["header"]
 			thread := extra["thread"]
 			log.Printf("pushgo: sender %d received msg from thread %d of %d devices for header %d\n", senderID, thread, len(msg.RegistrationIDs), header)
-			go func(m *gcm.Message, c *gcm.Sender, thread, header interface{}) {
+			go func(m *gcm.Message, thread, header interface{}) {
+				c := &gcm.Sender{ApiKey: apiKey}
 				resp, err := c.Send(m, s.retryCount)
 				log.Printf("pushgo: sender %d received response of thread %d for header %d\n", senderID, thread, header)
 				if err != nil {
@@ -79,7 +78,7 @@ func (s *Service) sender(senderID int, client *gcm.Sender) {
 					s.respCh <- core.NewResponse(resp, m)
 					log.Printf("pushgo: sender %d pushed response of thread %d to response channel for header %d\n", senderID, thread, header)
 				}
-			}(msg, client, thread, header)
+			}(msg, thread, header)
 		}
 	}
 }
