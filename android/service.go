@@ -64,21 +64,18 @@ func (s *Service) sender(senderID int, apiKey string) {
 	for {
 		select {
 		case msg := <-s.msgQueue:
-			extra := msg.Extra()
-			header := extra["header"]
-			thread := extra["thread"]
-			log.Printf("pushgo: sender %d received msg from thread %d of %d devices for header %d\n", senderID, thread, len(msg.RegistrationIDs), header)
-			go func(m *gcm.Message, thread, header interface{}) {
+			log.Printf("pushgo: sender %d received msg with extra %+v of %d devices\n", senderID, msg.Extra(), len(msg.RegistrationIDs))
+			go func(m *gcm.Message) {
 				c := &gcm.Sender{ApiKey: apiKey}
 				resp, err := c.Send(m, s.retryCount)
-				log.Printf("pushgo: sender %d received response of thread %d for header %d\n", senderID, thread, header)
+				log.Printf("pushgo: sender %d received response of message with extra %+v\n", senderID, msg.Extra())
 				if err != nil {
 					log.Println("pushgo error: ", err)
 				} else {
 					s.respCh <- core.NewResponse(resp, m)
-					log.Printf("pushgo: sender %d pushed response of thread %d to response channel for header %d\n", senderID, thread, header)
+					log.Printf("pushgo: sender %d pushed response of msg with extra %+v to response channel\n", senderID, msg.Extra())
 				}
-			}(msg, thread, header)
+			}(msg)
 		}
 	}
 }
