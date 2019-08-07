@@ -3,7 +3,7 @@ package android
 import (
 	"log"
 
-	"github.com/omerkirk/gcm"
+	"github.com/omerkirk/go-fcm"
 	"github.com/omerkirk/pushgo/core"
 )
 
@@ -22,7 +22,7 @@ type Service struct {
 	isProduction bool
 
 	respCh   chan *core.Response
-	msgQueue chan *gcm.Message
+	msgQueue chan *fcm.Message
 }
 
 func New(apiKey string, senderCount, retryCount int, isProduction bool) *Service {
@@ -34,7 +34,7 @@ func New(apiKey string, senderCount, retryCount int, isProduction bool) *Service
 
 		respCh: make(chan *core.Response, responseChannelBufferSize),
 
-		msgQueue: make(chan *gcm.Message, maxNumberOfMessages)}
+		msgQueue: make(chan *fcm.Message, maxNumberOfMessages)}
 
 	for i := 0; i < senderCount; i++ {
 		go s.sender(i, apiKey)
@@ -43,16 +43,19 @@ func New(apiKey string, senderCount, retryCount int, isProduction bool) *Service
 }
 
 func (s *Service) Queue(msg *core.Message) {
-	priority := gcm.MessagePriorityHigh
-	if msg.Priority == core.PriorityNormal {
-		priority = gcm.MessagePriorityNormal
-	}
+	priority := "high"
+	var ttl = uint(msg.Expiration)
 	deviceGroups := core.DeviceList(msg.Devices).Group(1000)
 	for i := 0; i < len(deviceGroups); i++ {
-		gcmMsg := gcm.NewMessage(deviceGroups[i], msg.Json, priority, msg.Expiration)
-		gcmMsg.SetExtra(msg.Extra)
-		gcmMsg.DryRun = !s.isProduction
-		s.msgQueue <- gcmMsg
+		fcmMsg := &fcm.Message{
+			RegistrationIDs: deviceGroups[i],
+			Data:            msg.Json,
+			Priority:        priority,
+			TimeToLive:      &ttl}
+
+		fcmMsg.SetExtra(msg.Extra)
+		fcmMsg.DryRun = !s.isProduction
+		s.msgQueue <- fcmMsg
 	}
 }
 
@@ -65,9 +68,12 @@ func (s *Service) sender(senderID int, apiKey string) {
 		select {
 		case msg := <-s.msgQueue:
 			log.Printf("pushgo: sender %d received msg with extra %+v of %d devices\n", senderID, msg.Extra(), len(msg.RegistrationIDs))
-			go func(m *gcm.Message) {
-				c := &gcm.Sender{ApiKey: apiKey}
-				resp, err := c.Send(m, s.retryCount)
+			go func(m *fcm.Message) {
+				c, err := fcm.NewClient(apiKey)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				resp, err := c.SendWithRetry(m, s.retryCount)
 				log.Printf("pushgo: sender %d received response of message with extra %+v\n", senderID, msg.Extra())
 				if err != nil {
 					log.Println("pushgo error: ", err)

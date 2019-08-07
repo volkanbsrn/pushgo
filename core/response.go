@@ -1,6 +1,6 @@
 package core
 
-import "github.com/omerkirk/gcm"
+import "github.com/omerkirk/go-fcm"
 
 const (
 	ResponseTypeDeviceExpired = 1
@@ -23,7 +23,7 @@ type Result struct {
 	NewRegistrationID string
 }
 
-func NewResponse(resp *gcm.Response, msg *gcm.Message) *Response {
+func NewResponse(resp *fcm.Response, msg *fcm.Message) *Response {
 	regIDs := msg.RegistrationIDs
 	sr := &Response{
 		Success:      resp.Success,
@@ -48,7 +48,7 @@ func NewResponse(resp *gcm.Response, msg *gcm.Message) *Response {
 				serviceResults = append(serviceResults, sp)
 			}
 		} else {
-			if result.Error == gcm.ResponseErrorInvalidRegistration || result.Error == gcm.ResponseErrorNotRegistered {
+			if result.Error == fcm.ErrInvalidRegistration || result.Error == fcm.ErrNotRegistered {
 				sp := Result{}
 				sp.Type = ResponseTypeDeviceExpired
 				sp.RegistrationID = regIDs[i]
