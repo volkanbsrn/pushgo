@@ -43,15 +43,19 @@ func New(apiKey string, senderCount, retryCount int, isProduction bool) *Service
 }
 
 func (s *Service) Queue(msg *core.Message) {
-	priority := "high"
 	var ttl = uint(msg.Expiration)
 	deviceGroups := core.DeviceList(msg.Devices).Group(1000)
 	for i := 0; i < len(deviceGroups); i++ {
 		fcmMsg := &fcm.Message{
 			RegistrationIDs: deviceGroups[i],
 			Data:            msg.Json,
-			Priority:        priority,
 			TimeToLive:      &ttl}
+
+		if msg.Priority == core.PriorityHigh {
+			fcmMsg.Priority = "high"
+		} else {
+			fcmMsg.Priority = "normal"
+		}
 
 		fcmMsg.SetExtra(msg.Extra)
 		fcmMsg.DryRun = !s.isProduction
