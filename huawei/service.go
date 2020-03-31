@@ -141,7 +141,6 @@ func (s *Service) Queue(msg *core.Message) {
 
 	for i := 0; i < len(deviceGroups); i++ {
 		hcmMsg := hcm.NewMessage(deviceGroups[i], string(data), strconv.Itoa(msg.Expiration), s.isProduction, msg.Extra)
-		log.Printf("pushgo huawei - message: %+v", *(hcmMsg.Message))
 		s.msgQueue <- hcmMsg
 	}
 }
@@ -167,7 +166,6 @@ func (s *Service) sender(senderID int) {
 				if err != nil {
 					log.Println("pushgo error: ", err)
 				} else {
-					log.Printf("pushgo huawei - received response: %+v", *resp)
 					s.respCh <- core.NewHCMResponse(resp, m)
 					log.Printf("pushgo: sender %d pushed response of msg with extra %+v to response channel\n", senderID, msg.Extra())
 				}
