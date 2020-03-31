@@ -1,6 +1,9 @@
 package core
 
-import "github.com/omerkirk/go-fcm"
+import (
+	"github.com/omerkirk/go-fcm"
+	"github.com/omerkirk/go-hcm"
+)
 
 const (
 	ResponseTypeDeviceExpired = 1
@@ -57,5 +60,17 @@ func NewResponse(resp *fcm.Response, msg *fcm.Message) *Response {
 		}
 	}
 	sr.Results = serviceResults
+	return sr
+}
+
+func NewHCMResponse(resp *hcm.Response, msg *hcm.Message) *Response {
+	regIDs := msg.Message.Token
+	sr := &Response{
+		Success:      len(regIDs),
+		Failure:      0,
+		CanonicalIDs: 0,
+		Extra:        msg.Extra(),
+		Total:        len(regIDs)}
+
 	return sr
 }

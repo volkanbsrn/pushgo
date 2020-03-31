@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
-	"github.com/omerkirk/go-fcm"
+	"github.com/omerkirk/go-hcm"
 	"github.com/omerkirk/pushgo/core"
 )
 
@@ -33,7 +35,10 @@ type Service struct {
 	isProduction bool
 
 	respCh   chan *core.Response
-	msgQueue chan *fcm.Message
+	msgQueue chan *hcm.Message
+
+	atLock      sync.Mutex
+	accessToken string
 }
 
 func New(appID int, appSecret string, senderCount, retryCount int, isProduction bool) *Service {
@@ -48,26 +53,39 @@ func New(appID int, appSecret string, senderCount, retryCount int, isProduction 
 
 		respCh: make(chan *core.Response, responseChannelBufferSize),
 
-		msgQueue: make(chan *fcm.Message, maxNumberOfMessages)}
+		msgQueue: make(chan *hcm.Message, maxNumberOfMessages)}
 	go s.refreshAccessToken()
 	return s
 }
 
 func (s *Service) refreshAccessToken() {
 	for {
-		at, err := s.getAccessToken()
+		at, expires, err := s.getAccessToken()
 		if err != nil {
-			log.Printf("cannot get access token: %+v", err)
+			log.Printf("pushgo huawei - cannot get access token: %+v", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		log.Printf("access token received: %s", at)
-		time.Sleep(10 * time.Second)
+		if at == "" || expires == 0 {
+			log.Printf("pushgo huawei - invalid access token response received: %s - %d", at, expires)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		log.Printf("pushgo huawei - access token received: %s", at)
+		s.atLock.Lock()
+		s.accessToken = at
+		s.atLock.Unlock()
+		if expires > 600 {
+			time.Sleep(time.Duration(expires-600) * time.Second)
+		} else {
+			time.Sleep(time.Duration(expires) * time.Second)
+		}
+
 	}
 }
 
-func (s *Service) getAccessToken() (string, error) {
+func (s *Service) getAccessToken() (string, int, error) {
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
@@ -75,7 +93,7 @@ func (s *Service) getAccessToken() (string, error) {
 	data := fmt.Sprintf("grant_type=client_credentials&client_id=%d&client_secret=%s", s.appID, s.appSecret)
 	req, err := http.NewRequest("POST", oAuthURL, bytes.NewBuffer([]byte(data)))
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	// request with timeout
@@ -89,43 +107,35 @@ func (s *Service) getAccessToken() (string, error) {
 	// execute request
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	defer resp.Body.Close()
 
 	// check response status
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%d error: %s", resp.StatusCode, resp.Status)
+		return "", 0, fmt.Errorf("%d error: %s", resp.StatusCode, resp.Status)
 	}
 
 	// build return
 	response := make(map[string]interface{})
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	log.Printf("access token: %s will expire in %d", response["access_token"], response["expires_in"])
-	return response["access_token"].(string), nil
+	return response["access_token"].(string), int(response["expires_in"].(float64)), nil
 }
 
 func (s *Service) Queue(msg *core.Message) {
-	var ttl = uint(msg.Expiration)
 	deviceGroups := core.DeviceList(msg.Devices).Group(1000)
+	data, err := json.Marshal(msg.Json)
+	if err != nil {
+		log.Printf("pushgo huawei - cannot marshal msj json: %+v", err)
+		return
+	}
+
 	for i := 0; i < len(deviceGroups); i++ {
-		fcmMsg := &fcm.Message{
-			RegistrationIDs: deviceGroups[i],
-			Data:            msg.Json,
-			TimeToLive:      &ttl}
-
-		if msg.Priority == core.PriorityHigh {
-			fcmMsg.Priority = "high"
-		} else {
-			fcmMsg.Priority = "normal"
-		}
-
-		fcmMsg.SetExtra(msg.Extra)
-		fcmMsg.DryRun = !s.isProduction
-		s.msgQueue <- fcmMsg
+		hcmMsg := hcm.NewMessage(deviceGroups[i], string(data), strconv.Itoa(msg.Expiration), s.isProduction, msg.Extra)
+		s.msgQueue <- hcmMsg
 	}
 }
 
@@ -137,18 +147,18 @@ func (s *Service) sender(senderID int, apiKey string) {
 	for {
 		select {
 		case msg := <-s.msgQueue:
-			log.Printf("pushgo: sender %d received msg with extra %+v of %d devices\n", senderID, msg.Extra(), len(msg.RegistrationIDs))
-			go func(m *fcm.Message) {
-				c, err := fcm.NewClient(apiKey)
+			log.Printf("pushgo: sender %d received msg with extra %+v of %d devices\n", senderID, msg.Extra(), len(msg.Message.Token))
+			go func(m *hcm.Message) {
+				c, err := hcm.NewClient(s.appID)
 				if err != nil {
 					log.Fatalln(err)
 				}
-				resp, err := c.SendWithRetry(m, s.retryCount)
+				resp, err := c.SendWithRetry(m, s.accessToken, s.retryCount)
 				log.Printf("pushgo: sender %d received response of message with extra %+v\n", senderID, msg.Extra())
 				if err != nil {
 					log.Println("pushgo error: ", err)
 				} else {
-					s.respCh <- core.NewResponse(resp, m)
+					s.respCh <- core.NewHCMResponse(resp, m)
 					log.Printf("pushgo: sender %d pushed response of msg with extra %+v to response channel\n", senderID, msg.Extra())
 				}
 			}(msg)
