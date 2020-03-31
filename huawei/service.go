@@ -37,7 +37,7 @@ type Service struct {
 	respCh   chan *core.Response
 	msgQueue chan *hcm.Message
 
-	atLock      sync.Mutex
+	atLock      sync.RWMutex
 	accessToken string
 }
 
@@ -157,7 +157,9 @@ func (s *Service) sender(senderID int) {
 				if err != nil {
 					log.Fatalln(err)
 				}
+				s.atLock.RLock()
 				resp, err := c.SendWithRetry(m, s.accessToken, s.retryCount)
+				s.atLock.RUnlock()
 				log.Printf("pushgo: sender %d received response of message with extra %+v\n", senderID, msg.Extra())
 				if err != nil {
 					log.Println("pushgo error: ", err)
