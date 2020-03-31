@@ -83,12 +83,12 @@ func NewHCMResponse(resp *hcm.Response, msg *hcm.Message) *Response {
 		} else {
 			sr.Success = int(respMsg["success"].(float64))
 			sr.Failure = int(respMsg["failure"].(float64))
-			illegalTokens := respMsg["illegal_tokens"].([]string)
+			illegalTokens := respMsg["illegal_tokens"].([]interface{})
 			serviceResults := make([]Result, 0)
 			for i := 0; i < len(illegalTokens); i++ {
 				sp := Result{}
 				sp.Type = ResponseTypeDeviceExpired
-				sp.RegistrationID = illegalTokens[i]
+				sp.RegistrationID = illegalTokens[i].(string)
 				serviceResults = append(serviceResults, sp)
 			}
 			sr.Results = serviceResults
