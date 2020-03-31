@@ -1,6 +1,9 @@
 package core
 
 import (
+	"encoding/json"
+	"log"
+
 	"github.com/omerkirk/go-fcm"
 	"github.com/omerkirk/go-hcm"
 )
@@ -66,11 +69,31 @@ func NewResponse(resp *fcm.Response, msg *fcm.Message) *Response {
 func NewHCMResponse(resp *hcm.Response, msg *hcm.Message) *Response {
 	regIDs := msg.Message.Token
 	sr := &Response{
-		Success:      len(regIDs),
-		Failure:      0,
-		CanonicalIDs: 0,
-		Extra:        msg.Extra(),
-		Total:        len(regIDs)}
+		Extra: msg.Extra(),
+		Total: len(regIDs)}
+
+	if resp.Code == hcm.RespCodeSuccess {
+		sr.Success = len(regIDs)
+		sr.Failure = 0
+	} else if resp.Code == hcm.RespCodePartialSuccess {
+		var respMsg map[string]interface{}
+		err := json.Unmarshal([]byte(resp.Message), &respMsg)
+		if err != nil {
+			log.Printf("cannot parse hcm msg %s: %+v", resp.Message, err)
+		} else {
+			sr.Success = int(respMsg["success"].(float64))
+			sr.Failure = int(respMsg["failure"].(float64))
+			illegalTokens := respMsg["illegal_tokens"].([]string)
+			serviceResults := make([]Result, 0)
+			for i := 0; i < len(illegalTokens); i++ {
+				sp := Result{}
+				sp.Type = ResponseTypeDeviceExpired
+				sp.RegistrationID = illegalTokens[i]
+				serviceResults = append(serviceResults, sp)
+			}
+			sr.Results = serviceResults
+		}
+	}
 
 	return sr
 }
