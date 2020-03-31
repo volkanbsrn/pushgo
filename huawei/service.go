@@ -20,7 +20,7 @@ const (
 	// Response channel buffer size
 	responseChannelBufferSize = 1000
 
-	oAuthURL = "https://oauthlogin.cloud.huawei.com/oauth2/v3/token"
+	oAuthURL = "https://oauth-login.cloud.huawei.com/oauth2/v3/token"
 )
 
 type Service struct {
