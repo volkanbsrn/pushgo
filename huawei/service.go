@@ -141,7 +141,7 @@ func (s *Service) Queue(msg *core.Message) {
 
 	for i := 0; i < len(deviceGroups); i++ {
 		hcmMsg := hcm.NewMessage(deviceGroups[i], string(data), strconv.Itoa(msg.Expiration), s.isProduction, msg.Extra)
-		log.Printf("pushgo huawei - message: %+v", *hcmMsg)
+		log.Printf("pushgo huawei - message: %+v", *(hcmMsg.Message))
 		s.msgQueue <- hcmMsg
 	}
 }
