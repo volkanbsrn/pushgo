@@ -55,6 +55,9 @@ func New(appID int, appSecret string, senderCount, retryCount int, isProduction 
 
 		msgQueue: make(chan *hcm.Message, maxNumberOfMessages)}
 	go s.refreshAccessToken()
+	for i := 0; i < senderCount; i++ {
+		go s.sender(i)
+	}
 	return s
 }
 
@@ -135,6 +138,7 @@ func (s *Service) Queue(msg *core.Message) {
 
 	for i := 0; i < len(deviceGroups); i++ {
 		hcmMsg := hcm.NewMessage(deviceGroups[i], string(data), strconv.Itoa(msg.Expiration), s.isProduction, msg.Extra)
+		log.Printf("pushgo huawei - message: %+v", hcmMsg)
 		s.msgQueue <- hcmMsg
 	}
 }
@@ -143,7 +147,7 @@ func (s *Service) Listen() chan *core.Response {
 	return s.respCh
 }
 
-func (s *Service) sender(senderID int, apiKey string) {
+func (s *Service) sender(senderID int) {
 	for {
 		select {
 		case msg := <-s.msgQueue:
