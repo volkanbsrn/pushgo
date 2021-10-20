@@ -51,6 +51,9 @@ func (s *Service) Queue(msg *core.Message) {
 			Data:            msg.Json,
 			TimeToLive:      &ttl}
 
+		if msg.Title != "" && msg.Text != "" {
+			fcmMsg.Notification = &fcm.Notification{Title: msg.Title, Body: msg.Text, Icon: msg.Icon}
+		}
 		if msg.Priority == core.PriorityHigh {
 			fcmMsg.Priority = "high"
 		} else {
