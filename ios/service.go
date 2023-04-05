@@ -1,16 +1,13 @@
 package ios
 
 import (
-	"crypto/tls"
-	"encoding/json"
 	"log"
-	"sync"
 	"time"
 
-	"github.com/RobotsAndPencils/buford/certificate"
-	"github.com/RobotsAndPencils/buford/payload"
-	"github.com/RobotsAndPencils/buford/push"
 	"github.com/omerkirk/pushgo/core"
+	"github.com/sideshow/apns2"
+	"github.com/sideshow/apns2/payload"
+	"github.com/sideshow/apns2/token"
 )
 
 const (
@@ -22,8 +19,8 @@ const (
 )
 
 type Service struct {
-	certificate tls.Certificate
-	bundleID    string
+	client   *apns2.Client
+	bundleID string
 
 	senderCount int
 
@@ -34,13 +31,20 @@ type Service struct {
 	msgQueue chan *message
 }
 
-func New(certName, passwd string, bundleID string, senderCount int, isProduction bool) *Service {
-	cert, err := certificate.Load(certName, passwd)
+func New(authFile, teamID, keyID string, bundleID string, senderCount int, isProduction bool) *Service {
+	authKey, err := token.AuthKeyFromFile(authFile)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("token error:", err)
 	}
+
+	token := &token.Token{
+		AuthKey: authKey,
+		KeyID:   keyID,
+		TeamID:  teamID,
+	}
+
 	s := &Service{
-		certificate:  cert,
+		client:       apns2.NewTokenClient(token).Production(),
 		bundleID:     bundleID,
 		isProduction: isProduction,
 
@@ -57,17 +61,13 @@ func New(certName, passwd string, bundleID string, senderCount int, isProduction
 }
 
 func (s *Service) Queue(msg *core.Message) {
-	p := payload.APS{
-		Alert: payload.Alert{Body: msg.Alert},
-		Sound: msg.Sound}
-
-	pm := p.Map()
+	p := payload.NewPayload().Alert(msg.Alert).Sound(msg.Sound)
 	for k, v := range msg.Custom {
-		pm[k] = v
+		p.Custom(k, v)
 	}
-	b, err := json.Marshal(pm)
+	b, err := p.MarshalJSON()
 	if err != nil {
-		log.Printf("pushgo: ios queue error: cannot convert msg to json %v\n", pm)
+		log.Printf("pushgo: ios queue error: cannot convert msg to json %+v\n", p)
 		return
 	}
 	msg.Bytes = b
@@ -80,50 +80,51 @@ func (s *Service) Listen() chan *core.Response {
 }
 
 func (s *Service) msgDistributor(msg *core.Message) {
-	respCh := make(chan push.Response, responseChannelBufferSize)
+	respCh := make(chan *response, responseChannelBufferSize)
 	sr := &core.Response{
 		Extra:     msg.Extra,
-		ReasonMap: make(map[error]int),
-	}
-	h := &push.Headers{
-		Topic:      s.bundleID,
-		Expiration: time.Now().Add(time.Second * time.Duration(msg.Expiration))}
-	if msg.Priority == core.PriorityNormal {
-		h.LowPriority = true
+		ReasonMap: make(map[string]int),
 	}
 	groupSize := (len(msg.Devices) / s.senderCount) + 1
 	deviceGroups := core.DeviceList(msg.Devices).Group(groupSize)
 	for i := 0; i < len(deviceGroups); i++ {
-		s.msgQueue <- &message{payload: msg.Bytes, devices: deviceGroups[i], headers: h, respCh: respCh}
+		for j := 0; j < len(deviceGroups[i]); j++ {
+			n := &apns2.Notification{
+				DeviceToken: deviceGroups[i][j],
+				Topic:       s.bundleID,
+				Expiration:  time.Now().Add(time.Second * time.Duration(msg.Expiration)),
+				Payload:     msg.Bytes,
+			}
+			if msg.Priority == core.PriorityNormal {
+				n.Priority = apns2.PriorityLow
+			} else {
+				n.Priority = apns2.PriorityHigh
+			}
+			s.msgQueue <- &message{n, respCh}
+		}
 	}
 
 	for {
 		select {
-		case iosResp := <-respCh:
+		case res := <-respCh:
+			resp := res.resp
 			sr.Total++
-			if iosResp.Err != nil {
-				var err error
-				e, ok := iosResp.Err.(*push.Error)
-				if !ok {
-					err = iosResp.Err
-				} else {
-					err = e.Reason
-				}
+			if resp.Sent() {
+				sr.Success++
+			} else {
 				sr.Failure++
-				if count, ok := sr.ReasonMap[err]; ok {
-					sr.ReasonMap[err] = count + 1
+				if count, ok := sr.ReasonMap[resp.Reason]; ok {
+					sr.ReasonMap[resp.Reason] = count + 1
 				} else {
-					sr.ReasonMap[err] = 1
+					sr.ReasonMap[resp.Reason] = 1
 				}
 				// IOs specific error can be returned even if the returned error is not of type push.Error
-				if e != nil && (err == push.ErrUnregistered || err == push.ErrDeviceTokenNotForTopic) {
+				if resp.Reason == apns2.ReasonUnregistered || resp.Reason == apns2.ReasonDeviceTokenNotForTopic {
 					sp := core.Result{}
 					sp.Type = core.ResponseTypeDeviceExpired
-					sp.RegistrationID = iosResp.DeviceToken
+					sp.RegistrationID = res.deviceToken
 					sr.Results = append(sr.Results, sp)
 				}
-			} else {
-				sr.Success++
 			}
 			if sr.Total == len(msg.Devices) {
 				s.respCh <- sr
@@ -135,45 +136,27 @@ func (s *Service) msgDistributor(msg *core.Message) {
 }
 
 type message struct {
-	payload []byte
-	devices []string
-	headers *push.Headers
+	notif  *apns2.Notification
+	respCh chan *response
+}
 
-	respCh chan push.Response
+type response struct {
+	resp        *apns2.Response
+	deviceToken string
 }
 
 func (s *Service) sender() {
-	client, err := push.NewClient(s.certificate)
-	if err != nil {
-		log.Fatal(err)
-	}
-	apns := &push.Service{
-		Client: client}
-	if s.isProduction {
-		apns.Host = push.Production
-	} else {
-		apns.Host = push.Development
-	}
-
 	for {
 		select {
-		case mr := <-s.msgQueue:
-			queue := push.NewQueue(apns, 250)
-			var wg sync.WaitGroup
-			go func() {
-				for r := range queue.Responses {
-					resp := r
-					mr.respCh <- resp
-					wg.Done()
+		case msg := <-s.msgQueue:
+			go func(m *message) {
+				res, err := s.client.Push(msg.notif)
+				if err != nil {
+					log.Println("pushgo error: ", err)
+				} else {
+					msg.respCh <- &response{res, msg.notif.DeviceToken}
 				}
-			}()
-
-			for i := 0; i < len(mr.devices); i++ {
-				wg.Add(1)
-				queue.Push(mr.devices[i], mr.headers, mr.payload)
-			}
-			wg.Wait()
-			queue.Close()
+			}(msg)
 		}
 	}
 }

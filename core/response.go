@@ -16,7 +16,7 @@ const (
 type Response struct {
 	Success      int
 	Failure      int
-	ReasonMap    map[error]int
+	ReasonMap    map[string]int
 	CanonicalIDs int
 	Total        int
 	Extra        map[string]interface{}

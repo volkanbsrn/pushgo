@@ -15,6 +15,6 @@ func NewHuawei(appID int, appSecret string, senderCount, retryCount int, isProdu
 	return huawei.New(appID, appSecret, senderCount, retryCount, isProduction)
 }
 
-func NewAPNS(certName, passwd string, bundleID string, senderCount int, isProduction bool) core.Pusher {
-	return ios.New(certName, passwd, bundleID, senderCount, isProduction)
+func NewAPNS(authFile, teamID, keyID, bundleID string, senderCount int, isProduction bool) core.Pusher {
+	return ios.New(authFile, teamID, keyID, bundleID, senderCount, isProduction)
 }
