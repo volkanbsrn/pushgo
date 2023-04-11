@@ -44,7 +44,6 @@ func New(authFile, teamID, keyID string, bundleID string, senderCount int, isPro
 	}
 
 	s := &Service{
-		client:       apns2.NewTokenClient(token).Production(),
 		bundleID:     bundleID,
 		isProduction: isProduction,
 
@@ -53,6 +52,12 @@ func New(authFile, teamID, keyID string, bundleID string, senderCount int, isPro
 		respCh: make(chan *core.Response, responseChannelBufferSize),
 
 		msgQueue: make(chan *message, maxNumberOfMessages)}
+
+	if isProduction {
+		s.client = apns2.NewTokenClient(token).Production()
+	} else {
+		s.client = apns2.NewTokenClient(token).Development()
+	}
 
 	for i := 0; i < senderCount; i++ {
 		go s.sender()
