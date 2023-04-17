@@ -72,6 +72,9 @@ func (s *Service) Queue(msg *core.Message) {
 	for k, v := range msg.Custom {
 		p.Custom(k, v)
 	}
+	if msg.Icon != "" {
+		p.Custom("media-url", msg.Icon)
+	}
 	b, err := p.MarshalJSON()
 	if err != nil {
 		log.Printf("pushgo: ios queue error: cannot convert msg to json %+v\n", p)
