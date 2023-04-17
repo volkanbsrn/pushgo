@@ -73,6 +73,7 @@ func (s *Service) Queue(msg *core.Message) {
 		p.Custom(k, v)
 	}
 	if msg.Icon != "" {
+		p = p.MutableContent()
 		p.Custom("media-url", msg.Icon)
 	}
 	b, err := p.MarshalJSON()
@@ -160,7 +161,7 @@ func (s *Service) sender() {
 		select {
 		case msg := <-s.msgQueue:
 			go func(m *message) {
-				log.Printf("ios service push: %+v", msg.notif)
+				log.Printf("ios service push: %+v", string(msg.notif.Payload.([]byte)))
 				res, err := s.client.Push(msg.notif)
 				if err != nil {
 					log.Println("pushgo error: ", err)
