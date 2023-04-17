@@ -19,8 +19,9 @@ const (
 )
 
 type Service struct {
-	client   *apns2.Client
-	bundleID string
+	client    *apns2.Client
+	devClient *apns2.Client
+	bundleID  string
 
 	senderCount int
 
@@ -55,6 +56,7 @@ func New(authFile, teamID, keyID string, bundleID string, senderCount int, isPro
 
 	if isProduction {
 		s.client = apns2.NewTokenClient(token).Production()
+		s.devClient = apns2.NewTokenClient(token).Development()
 	} else {
 		s.client = apns2.NewTokenClient(token).Development()
 	}
@@ -161,6 +163,15 @@ func (s *Service) sender() {
 				} else {
 					msg.respCh <- &response{res, msg.notif.DeviceToken}
 				}
+				if s.devClient != nil {
+					res, err := s.devClient.Push(msg.notif)
+					if err != nil {
+						log.Println("pushgo error: ", err)
+					} else {
+						msg.respCh <- &response{res, msg.notif.DeviceToken}
+					}
+				}
+
 			}(msg)
 		}
 	}
