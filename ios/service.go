@@ -160,6 +160,7 @@ func (s *Service) sender() {
 		select {
 		case msg := <-s.msgQueue:
 			go func(m *message) {
+				log.Printf("ios service push: %+v", msg.notif)
 				res, err := s.client.Push(msg.notif)
 				if err != nil {
 					log.Println("pushgo error: ", err)

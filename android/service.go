@@ -75,6 +75,7 @@ func (s *Service) sender(senderID int, apiKey string) {
 		select {
 		case msg := <-s.msgQueue:
 			log.Printf("pushgo: sender %d received msg with extra %+v of %d devices\n", senderID, msg.Extra(), len(msg.RegistrationIDs))
+			log.Printf("android service push: %+v", msg)
 			go func(m *fcm.Message) {
 				c, err := fcm.NewClient(apiKey)
 				if err != nil {
