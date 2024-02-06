@@ -52,14 +52,13 @@ func (s *Service) Queue(msg *core.Message) {
 			TimeToLive:      &ttl}
 
 		if msg.Title != "" || msg.Text != "" {
-			fcmMsg.Notification = &fcm.Notification{Title: msg.Title, Body: msg.Text, Icon: msg.Icon}
+			fcmMsg.Notification = &fcm.Notification{Title: msg.Title, Body: msg.Text, Icon: msg.Icon, Tag: msg.ThreadID}
 		}
 		if msg.Priority == core.PriorityHigh {
 			fcmMsg.Priority = "high"
 		} else {
 			fcmMsg.Priority = "normal"
 		}
-
 		fcmMsg.SetExtra(msg.Extra)
 		fcmMsg.DryRun = !s.isProduction
 		s.msgQueue <- fcmMsg

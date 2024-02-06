@@ -21,9 +21,10 @@ type Message struct {
 	Priority   int
 	Expiration int
 
-	Title string
-	Text  string
-	Icon  string
+	Title    string
+	Text     string
+	Icon     string
+	ThreadID string
 	// GCM related fields
 	Json map[string]interface{}
 
