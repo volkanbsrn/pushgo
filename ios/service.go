@@ -68,9 +68,12 @@ func New(authFile, teamID, keyID string, bundleID string, senderCount int, isPro
 }
 
 func (s *Service) Queue(msg *core.Message) {
-	p := payload.NewPayload().Alert(msg.Alert).Sound(msg.Sound).ThreadID(msg.ThreadID).AlertTitle(msg.Title)
+	p := payload.NewPayload().Alert(msg.Alert).Sound(msg.Sound).ThreadID(msg.ThreadID)
 	for k, v := range msg.Custom {
 		p.Custom(k, v)
+	}
+	if msg.Title != "" {
+		p.AlertTitle(msg.Title)
 	}
 	if msg.Icon != "" {
 		p = p.MutableContent()
