@@ -68,7 +68,7 @@ func New(authFile, teamID, keyID string, bundleID string, senderCount int, isPro
 }
 
 func (s *Service) Queue(msg *core.Message) {
-	p := payload.NewPayload().Alert(msg.Alert).Sound(msg.Sound).ThreadID(msg.ThreadID)
+	p := payload.NewPayload().Alert(msg.Alert).Sound(msg.Sound).ThreadID(msg.ThreadID).AlertTitle(msg.Title)
 	for k, v := range msg.Custom {
 		p.Custom(k, v)
 	}
