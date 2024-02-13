@@ -73,6 +73,7 @@ func (s *Service) Queue(msg *core.Message) {
 		p.Custom(k, v)
 	}
 	if msg.Title != "" {
+		p.AlertBody(msg.Alert)
 		p.AlertTitle(msg.Title)
 	}
 	if msg.Icon != "" {
