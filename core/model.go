@@ -29,10 +29,16 @@ type Message struct {
 	Json map[string]interface{}
 
 	// APNS related fields
-	Alert  string
-	Sound  string
-	Custom map[string]interface{}
-	Bytes  []byte
+	Alert           string
+	Sound           string
+	Custom          map[string]interface{}
+	Bytes           []byte
+	PushType        string
+	Event           string
+	ContentState    map[string]interface{}
+	AttributesType  string
+	Attributes      map[string]interface{}
+	DismissDuration int
 
 	Extra map[string]interface{}
 }

@@ -1,13 +1,14 @@
 package ios
 
 import (
+	"fmt"
 	"log"
 	"time"
 
+	"github.com/kokteyldev/apns2"
+	"github.com/kokteyldev/apns2/payload"
+	"github.com/kokteyldev/apns2/token"
 	"github.com/omerkirk/pushgo/core"
-	"github.com/sideshow/apns2"
-	"github.com/sideshow/apns2/payload"
-	"github.com/sideshow/apns2/token"
 )
 
 const (
@@ -69,6 +70,7 @@ func New(authFile, teamID, keyID string, bundleID string, senderCount int, isPro
 
 func (s *Service) Queue(msg *core.Message) {
 	p := payload.NewPayload().Alert(msg.Alert).Sound(msg.Sound).ThreadID(msg.ThreadID)
+
 	for k, v := range msg.Custom {
 		p.Custom(k, v)
 	}
@@ -79,6 +81,19 @@ func (s *Service) Queue(msg *core.Message) {
 	if msg.Icon != "" {
 		p = p.MutableContent()
 		p.Custom("media-url", msg.Icon)
+	}
+
+	if msg.PushType == string(apns2.PushTypeLiveActivity) {
+		if msg.Event == "end" {
+			p.DismissalDate(time.Now().Add(time.Second * time.Duration(msg.DismissDuration)).Unix())
+		}
+		p.Event(msg.Event)
+		p.ContentState(msg.ContentState)
+		p.Timestamp(time.Now().Unix())
+		p.SetAttributesType(msg.AttributesType)
+		p.SetAttributes(msg.Attributes)
+		log.Printf("live activity: timestamp: %d, push type: %s, event: %s, content state: %v, attribute type: %s, attributes: %v",
+			time.Now().Unix(), msg.PushType, msg.Event, msg.ContentState, msg.AttributesType, msg.Attributes)
 	}
 	b, err := p.MarshalJSON()
 	if err != nil {
@@ -114,6 +129,10 @@ func (s *Service) msgDistributor(msg *core.Message) {
 				n.Priority = apns2.PriorityLow
 			} else {
 				n.Priority = apns2.PriorityHigh
+			}
+			if msg.PushType == string(apns2.PushTypeLiveActivity) {
+				n.PushType = apns2.PushTypeLiveActivity
+				n.Topic = fmt.Sprintf("%s.push-type.liveactivity", s.bundleID)
 			}
 			s.msgQueue <- &message{n, respCh}
 		}
@@ -167,6 +186,7 @@ func (s *Service) sender() {
 			go func(m *message) {
 				log.Printf("ios service push: %+v", string(msg.notif.Payload.([]byte)))
 				res, err := s.client.Push(msg.notif)
+				log.Printf("response: %+v", res)
 				if err != nil {
 					log.Println("pushgo error: ", err)
 				} else {

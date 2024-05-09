@@ -8,14 +8,14 @@ github.com/klauspost/compress v1.8.2 h1:Bx0qjetmNjdFXASH02NSAREKpiaDwkO1DRZ3dV2K
 github.com/klauspost/compress v1.8.2/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0guNDohfE1A=
 github.com/klauspost/cpuid v1.2.1 h1:vJi+O/nMdFt0vqm8NZBI6wzALWdA2X+egi0ogNyrC/w=
 github.com/klauspost/cpuid v1.2.1/go.mod h1:Pj4uuM528wm8OyEC2QMXAi2YiTZ96dNQPGgoMS4s3ek=
+github.com/kokteyldev/apns2 v0.0.0-20240508074026-36c03a03d7c8 h1:lhLyJAsj5g/DVovip2iiiK9TxId7VfY4mkDdb0tBYJY=
+github.com/kokteyldev/apns2 v0.0.0-20240508074026-36c03a03d7c8/go.mod h1:beTY+Ore0jbjOTDXEd5WNdOXBQRue3eQ2iH5KATDiIs=
 github.com/omerkirk/go-fcm v0.1.5 h1:A+6kq4yKEhQB3GsXEDpuBnxHX3R0rA92Y51PZFapzf4=
 github.com/omerkirk/go-fcm v0.1.5/go.mod h1:0lq3xUHVwF6K+NlsTtLh3KsLsWv6NwEIawSQzsvIKvM=
 github.com/omerkirk/go-hcm v1.0.1 h1:1w/6uzxZxIqrMBPgUOIe/na+y4PFJ/H3nKy/3JomKy8=
 github.com/omerkirk/go-hcm v1.0.1/go.mod h1:d63hsrTF9oAw40YKsFO+0Xc447eS02j0lqkjYZaNyT0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/sideshow/apns2 v0.23.0 h1:lpkikaZ995GIcKk6AFsYzHyezCrsrfEDvUWcWkEGErY=
-github.com/sideshow/apns2 v0.23.0/go.mod h1:7Fceu+sL0XscxrfLSkAoH6UtvKefq3Kq1n4W3ayQZqE=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
